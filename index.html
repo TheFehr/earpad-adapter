@@ -406,7 +406,6 @@ worker.onmessage = ({ data }) => {
     if (pendingRender) { pendingRender = false; triggerRender(); }
   } else if (data.type === 'log') {
     dbg(data.text);
-    if (rendering) setStatus(data.text, 'busy');
   }
 };
 
