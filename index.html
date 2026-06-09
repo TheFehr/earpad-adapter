@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Earpad Adapter Generator</title>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.167.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.167.0/examples/jsm/"
+      }
+    }
+  </script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #0d1117;
+      --surface: #161b22;
+      --border:  #30363d;
+      --text:    #e6edf3;
+      --muted:   #8b949e;
+      --accent:  #58a6ff;
+      --mono:    'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 14px;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ─────────────────────────────────────────────────── */
+    header {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      padding: 10px 18px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    header h1 { font-size: 15px; font-weight: 600; }
+    header p  { font-size: 12px; color: var(--muted); }
+
+    /* ── Layout ─────────────────────────────────────────────────── */
+    main {
+      display: grid;
+      grid-template-columns: 290px 1fr;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Parameters panel ───────────────────────────────────────── */
+    .params {
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      padding: 4px 0 16px;
+    }
+
+    .param-group { padding: 12px 16px 4px; }
+    .param-group + .param-group { border-top: 1px solid var(--border); }
+
+    .param-group h2 {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    .param { margin-bottom: 10px; }
+
+    .param-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 3px;
+    }
+
+    .param-row label {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text);
+    }
+
+    .param-row input[type=number] {
+      width: 66px;
+      padding: 2px 6px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 12px;
+      text-align: right;
+    }
+    .param-row input[type=number]:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .param input[type=range] {
+      width: 100%;
+      accent-color: var(--accent);
+      cursor: pointer;
+      height: 16px;
+    }
+
+    .param-hint {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 1px;
+    }
+
+    /* ── Viewer ─────────────────────────────────────────────────── */
+    .viewer {
+      position: relative;
+      overflow: hidden;
+    }
+
+    #preview {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    #debug-log {
+      position: absolute;
+      top: 8px; left: 8px; right: 8px;
+      max-height: 140px;
+      overflow-y: auto;
+      background: rgba(0,0,0,0.75);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 6px 8px;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: #adbac7;
+      pointer-events: none;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .viewer-footer {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      padding: 14px 16px 12px;
+      background: linear-gradient(transparent, rgba(13,17,23,0.85) 40%);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      pointer-events: none;
+    }
+
+    #status {
+      font-size: 12px;
+      color: var(--muted);
+      transition: color 0.15s;
+    }
+    #status.busy  { color: var(--accent); }
+    #status.error { color: #f85149; }
+    #status.ok    { color: #3fb950; }
+
+    .mode-toggle {
+      display: flex;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      pointer-events: all;
+      flex-shrink: 0;
+    }
+    .mode-toggle button {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      font-size: 12px;
+      padding: 4px 11px;
+      cursor: pointer;
+      transition: background 0.1s, color 0.1s;
+      font-family: inherit;
+    }
+    .mode-toggle button + button { border-left: 1px solid var(--border); }
+    .mode-toggle button.active { background: var(--accent); color: #0d1117; font-weight: 600; }
+    .mode-toggle button:not(.active):hover { background: var(--border); color: var(--text); }
+
+    #btn-download {
+      pointer-events: all;
+      background: var(--accent);
+      color: #0d1117;
+      border: none;
+      border-radius: 6px;
+      padding: 6px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+    }
+    #btn-download:disabled { opacity: 0.35; cursor: not-allowed; }
+    #btn-download:not(:disabled):hover { background: #79c0ff; }
+
+    .dim-label {
+      color: #e6edf3;
+      font-size: 12px;
+      font-family: 'SFMono-Regular', Consolas, monospace;
+      background: rgba(13,17,23,0.75);
+      padding: 2px 6px;
+      border-radius: 3px;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+
+    /* ── Responsive ─────────────────────────────────────────────── */
+    @media (max-width: 680px) {
+      main {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 1fr;
+      }
+      .params {
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        max-height: 45dvh;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Earpad Adapter Generator</h1>
+  <p>3D-printable ring adapter for mismatched headset earpads — print two halves, no hardware needed</p>
+</header>
+
+<main>
+  <aside class="params" id="params-panel"></aside>
+  <div class="viewer">
+    <canvas id="preview"></canvas>
+    <div id="debug-log"></div>
+    <div class="viewer-footer">
+      <div class="mode-toggle">
+        <button id="mode-half" class="active">Half</button>
+        <button id="mode-assembly">Assembly</button>
+      </div>
+      <span id="status">Loading OpenSCAD…</span>
+      <button id="btn-download" disabled>⬇ Download STL</button>
+    </div>
+  </div>
+</main>
+
+<script type="module">
+import * as THREE               from 'three';
+import { STLLoader }            from 'three/addons/loaders/STLLoader.js';
+import { OrbitControls }        from 'three/addons/controls/OrbitControls.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+// ── Parameter definitions ─────────────────────────────────────────────────────
+const PARAM_GROUPS = [
+  { label: 'Headset Mount', items: [
+    { id: 'mount_major', label: 'mount_major', hint: 'outer oval, top-bottom',                 value: 97,  min: 50,  max: 160, step: 1,   unit: 'mm' },
+    { id: 'mount_minor', label: 'mount_minor', hint: 'outer oval, left-right (end-circle ⌀)', value: 82,  min: 40,  max: 150, step: 1,   unit: 'mm' },
+  ]},
+  { label: 'Replacement Earpad', items: [
+    { id: 'pad_major',   label: 'pad_major',   hint: 'inner opening, top-bottom',              value: 106, min: 50,  max: 180, step: 1,   unit: 'mm' },
+    { id: 'pad_minor',   label: 'pad_minor',   hint: 'inner opening, left-right',              value: 95,  min: 40,  max: 160, step: 1,   unit: 'mm' },
+  ]},
+  { label: 'Adapter', items: [
+    { id: 'adapter_h',     label: 'adapter_h',     hint: 'total height of the ring',           value: 3,   min: 2,   max: 20,  step: 0.5, unit: 'mm' },
+    { id: 'fit_clearance', label: 'fit_clearance', hint: 'total bore clearance (0.2 per side)', value: 0.4, min: 0,   max: 2,   step: 0.1, unit: 'mm' },
+  ]},
+  { label: 'Inner Ridge', items: [
+    { id: 'ridge_w', label: 'ridge_w', hint: 'axial width — fits in mount groove',            value: 1.5, min: 0.5, max: 5,   step: 0.5, unit: 'mm' },
+    { id: 'ridge_d', label: 'ridge_d', hint: 'radial depth — seats inside mount groove',      value: 5.0, min: 1,   max: 10,  step: 0.5, unit: 'mm' },
+  ]},
+  { label: 'Outer Groove (optional)', items: [
+    { id: 'groove_w', label: 'groove_w', hint: 'grommet groove width (0 = disabled)',         value: 0,   min: 0,   max: 10,  step: 0.5, unit: 'mm' },
+    { id: 'groove_d', label: 'groove_d', hint: 'grommet groove depth',                        value: 3,   min: 1,   max: 8,   step: 0.5, unit: 'mm' },
+  ]},
+];
+
+// ── Build parameter UI ────────────────────────────────────────────────────────
+const params = {};
+const panel = document.getElementById('params-panel');
+
+for (const group of PARAM_GROUPS) {
+  const sec = document.createElement('div');
+  sec.className = 'param-group';
+  sec.innerHTML = `<h2>${group.label}</h2>`;
+
+  for (const p of group.items) {
+    params[p.id] = p.value;
+
+    const div = document.createElement('div');
+    div.className = 'param';
+    div.innerHTML = `
+      <div class="param-row">
+        <label for="n-${p.id}">${p.label}</label>
+        <input type="number" id="n-${p.id}" data-id="${p.id}"
+               value="${p.value}" min="${p.min}" max="${p.max}" step="${p.step}">
+      </div>
+      <input type="range" id="r-${p.id}" data-id="${p.id}"
+             value="${p.value}" min="${p.min}" max="${p.max}" step="${p.step}">
+      <div class="param-hint">${p.hint}</div>`;
+
+    sec.appendChild(div);
+  }
+  panel.appendChild(sec);
+}
+
+// Sync sliders ↔ number inputs and trigger re-render on change
+function setParam(id, value) {
+  params[id] = value;
+  document.getElementById(`n-${id}`).value = value;
+  document.getElementById(`r-${id}`).value = value;
+}
+
+function onParamChange(id, rawValue) {
+  const p = PARAM_GROUPS.flatMap(g => g.items).find(x => x.id === id);
+  let value = Math.min(p.max, Math.max(p.min, parseFloat(rawValue) || p.value));
+
+  // Mount opening must be smaller than pad opening
+  if (id === 'mount_major') value = Math.min(value, params.pad_major - 1);
+  if (id === 'mount_minor') value = Math.min(value, params.pad_minor - 1);
+  if (id === 'pad_major')   value = Math.max(value, params.mount_major + 1);
+  if (id === 'pad_minor')   value = Math.max(value, params.mount_minor + 1);
+
+  setParam(id, value);
+  scheduleRender();
+}
+
+panel.addEventListener('input', (e) => {
+  const id = e.target.dataset.id;
+  if (id) onParamChange(id, e.target.value);
+});
+
+// ── View mode ─────────────────────────────────────────────────────────────────
+let currentMode = 'half';
+
+document.getElementById('mode-half').addEventListener('click', () => {
+  if (currentMode === 'half') return;
+  currentMode = 'half';
+  document.getElementById('mode-half').classList.add('active');
+  document.getElementById('mode-assembly').classList.remove('active');
+  scheduleRender();
+});
+
+document.getElementById('mode-assembly').addEventListener('click', () => {
+  if (currentMode === 'assembly') return;
+  currentMode = 'assembly';
+  document.getElementById('mode-assembly').classList.add('active');
+  document.getElementById('mode-half').classList.remove('active');
+  scheduleRender();
+});
+
+// ── OpenSCAD worker ───────────────────────────────────────────────────────────
+// ── Debug log panel ───────────────────────────────────────────────────────────
+const debugEl = document.getElementById('debug-log');
+function dbg(msg) {
+  console.log('[main]', msg);
+  debugEl.textContent += msg + '\n';
+  debugEl.scrollTop = debugEl.scrollHeight;
+}
+dbg('Creating worker…');
+
+const worker = new Worker('./openscad-worker.js');
+dbg('Worker created');
+
+worker.onerror = (e) => {
+  dbg('WORKER ERROR: ' + (e.message || JSON.stringify(e)));
+  setStatus('Worker error — see debug log', 'error');
+};
+
+let lastStl = null;
+let renderTimer = null;
+let rendering = false;
+let pendingRender = false;
+
+const statusEl = document.getElementById('status');
+const dlBtn    = document.getElementById('btn-download');
+
+function setStatus(text, cls = '') {
+  statusEl.textContent = text;
+  statusEl.className = cls;
+}
+
+worker.onmessage = ({ data }) => {
+  if (data.type === 'result') {
+    lastStl = data.stl;
+    dlBtn.disabled = false;
+    loadStl(data.stl);
+    setStatus('Ready — drag to rotate, scroll to zoom', 'ok');
+    rendering = false;
+    if (pendingRender) { pendingRender = false; triggerRender(); }
+  } else if (data.type === 'error') {
+    setStatus('Error: ' + data.message, 'error');
+    rendering = false;
+    if (pendingRender) { pendingRender = false; triggerRender(); }
+  } else if (data.type === 'log') {
+    dbg(data.text);
+    if (rendering) setStatus(data.text, 'busy');
+  }
+};
+
+function triggerRender() {
+  if (rendering) { pendingRender = true; return; }
+  rendering = true;
+  setStatus('Rendering…', 'busy');
+  dbg('Posting render message to worker…');
+  worker.postMessage({ type: 'render', params: { ...params }, mode: currentMode });
+}
+
+function scheduleRender() {
+  clearTimeout(renderTimer);
+  renderTimer = setTimeout(triggerRender, 700);
+}
+
+// ── Three.js setup ────────────────────────────────────────────────────────────
+const canvas   = document.getElementById('preview');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.shadowMap.enabled = true;
+
+const labelRenderer = new CSS2DRenderer();
+labelRenderer.domElement.style.cssText =
+  'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;';
+document.querySelector('.viewer').appendChild(labelRenderer.domElement);
+
+const scene  = new THREE.Scene();
+scene.background = new THREE.Color(0x0d1117);
+
+const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 10000);
+camera.position.set(140, 80, 160);
+
+// Lighting
+const ambient = new THREE.AmbientLight(0xffffff, 0.55);
+scene.add(ambient);
+
+const keyLight = new THREE.DirectionalLight(0xffffff, 0.9);
+keyLight.position.set(150, 200, 100);
+scene.add(keyLight);
+
+const fillLight = new THREE.DirectionalLight(0x8eb8ff, 0.35);
+fillLight.position.set(-100, -50, -120);
+scene.add(fillLight);
+
+// Grid
+const grid = new THREE.GridHelper(300, 30, 0x21262d, 0x21262d);
+scene.add(grid);
+
+const labelsGroup = new THREE.Group();
+scene.add(labelsGroup);
+
+// Controls
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 30;
+controls.maxDistance = 800;
+
+// Resize handling — compare against actual pixel dimensions (devicePixelRatio aware)
+let lastClientW = 0, lastClientH = 0;
+function resize() {
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  if (w !== lastClientW || h !== lastClientH) {
+    lastClientW = w; lastClientH = h;
+    renderer.setSize(w, h, false);
+    labelRenderer.setSize(w, h);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+}
+
+// Render loop
+(function animate() {
+  requestAnimationFrame(animate);
+  resize();
+  controls.update();
+  renderer.render(scene, camera);
+  labelRenderer.render(scene, camera);
+})();
+
+// ── Dimension labels ──────────────────────────────────────────────────────────
+function makeDimLine(start, end, axis) {
+  const tickLen = 5;
+  const pts = [...start.toArray(), ...end.toArray()];
+  if (axis === 'x') {
+    pts.push(start.x, start.y - tickLen/2, start.z,  start.x, start.y + tickLen/2, start.z,
+             end.x,   end.y   - tickLen/2, end.z,    end.x,   end.y   + tickLen/2, end.z);
+  } else {
+    pts.push(start.x - tickLen/2, start.y, start.z,  start.x + tickLen/2, start.y, start.z,
+             end.x   - tickLen/2, end.y,   end.z,    end.x   + tickLen/2, end.y,   end.z);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+  const line = new THREE.LineSegments(geo,
+    new THREE.LineBasicMaterial({ color: 0xffffff, depthTest: false }));
+  line.renderOrder = 1;
+  return line;
+}
+
+function makeCSSLabel(text, position) {
+  const el = document.createElement('div');
+  el.className = 'dim-label';
+  el.textContent = text;
+  const obj = new CSS2DObject(el);
+  obj.position.copy(position);
+  return obj;
+}
+
+function clearDimLabels() {
+  for (const child of [...labelsGroup.children]) {
+    if (child.isCSS2DObject) child.element.remove();
+    labelsGroup.remove(child);
+  }
+}
+
+function buildDimLabels() {
+  clearDimLabels();
+  const p     = params;
+  const gap   = 16;
+  const z     = p.adapter_h / 2 + 2;
+  const padX  = p.pad_major / 2;
+  const padY  = p.pad_minor;
+  const padYc = p.pad_minor / 2;
+  const boreX = (p.mount_major + p.fit_clearance) / 2;
+  const boreY = (p.mount_minor + p.fit_clearance) / 2;
+
+  // pad_major — horizontal, above ring
+  labelsGroup.add(makeDimLine(
+    new THREE.Vector3(-padX, padY + gap, z), new THREE.Vector3(padX, padY + gap, z), 'x'));
+  labelsGroup.add(makeCSSLabel(`pad_major: ${p.pad_major} mm`,
+    new THREE.Vector3(0, padY + gap + 7, z)));
+
+  // pad_minor — vertical, right of ring
+  labelsGroup.add(makeDimLine(
+    new THREE.Vector3(padX + gap, 0, z), new THREE.Vector3(padX + gap, padY, z), 'y'));
+  labelsGroup.add(makeCSSLabel(`pad_minor: ${p.pad_minor} mm`,
+    new THREE.Vector3(padX + gap + 6, padYc, z)));
+
+  // mount_major — horizontal through bore centre; label at right endpoint, below
+  labelsGroup.add(makeDimLine(
+    new THREE.Vector3(-boreX, padYc, z), new THREE.Vector3(boreX, padYc, z), 'x'));
+  labelsGroup.add(makeCSSLabel(`mount_major: ${p.mount_major} mm`,
+    new THREE.Vector3(-boreX, padYc - 9, z)));
+
+  // mount_minor — vertical through bore centre; label at top endpoint, right
+  labelsGroup.add(makeDimLine(
+    new THREE.Vector3(0, padYc - boreY, z), new THREE.Vector3(0, padYc + boreY, z), 'y'));
+  labelsGroup.add(makeCSSLabel(`mount_minor: ${p.mount_minor} mm`,
+    new THREE.Vector3(8, padYc + boreY + 6, z)));
+}
+
+// ── STL → Three.js mesh ───────────────────────────────────────────────────────
+const stlLoader = new STLLoader();
+let currentMesh = null;
+
+function loadStl(stlUint8) {
+  if (currentMesh) {
+    scene.remove(currentMesh);
+    currentMesh.geometry.dispose();
+  }
+
+  const geometry = stlLoader.parse(stlUint8.buffer);
+  geometry.computeBoundingBox();
+  geometry.computeVertexNormals();
+
+  // Centre the part
+  const centre = new THREE.Vector3();
+  geometry.boundingBox.getCenter(centre);
+  geometry.translate(-centre.x, -centre.y, -centre.z);
+
+  // Sit the part on the grid
+  geometry.computeBoundingBox();
+  geometry.translate(0, -geometry.boundingBox.min.y, 0);
+
+  const material = new THREE.MeshStandardMaterial({
+    color: 0x4c8bf5,
+    roughness: 0.45,
+    metalness: 0.05,
+  });
+
+  currentMesh = new THREE.Mesh(geometry, material);
+  scene.add(currentMesh);
+
+  clearDimLabels();
+  if (currentMode === 'assembly') buildDimLabels();
+
+  // Fit camera
+  const size = new THREE.Vector3();
+  geometry.boundingBox.getSize(size);
+  const d = Math.max(size.x, size.y, size.z) * 1.6;
+  camera.position.set(d, d * 0.6, d);
+  controls.target.set(0, size.y / 2, 0);
+  controls.update();
+}
+
+// ── Download ──────────────────────────────────────────────────────────────────
+dlBtn.addEventListener('click', () => {
+  if (!lastStl) return;
+  const url = URL.createObjectURL(new Blob([lastStl], { type: 'application/octet-stream' }));
+  const filename = currentMode === 'half' ? 'earpad-adapter-half.stl' : 'earpad-adapter-assembly.stl';
+  const a = Object.assign(document.createElement('a'), { href: url, download: filename });
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+// ── Kick off first render ────────────────────────────────────────────────────
+setStatus('Loading OpenSCAD WASM (~14 MB, cached after first visit)…', 'busy');
+triggerRender();
+</script>
+
+</body>
+</html>

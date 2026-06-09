@@ -1,0 +1,16 @@
+# OpenSCAD generated outputs
+*.csg
+*.stl
+*.amf
+*.3mf
+*.dxf
+*.svg
+*.echo
+*.ast
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/

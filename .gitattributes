@@ -1,0 +1,15 @@
+# Normalise line endings to LF on commit
+* text=auto
+
+# OpenSCAD source — treat as text, enable diffs
+*.scad text eol=lf linguist-language=OpenSCAD
+
+# Images — binary, no diff
+*.png binary
+*.jpg binary
+*.gif binary
+
+# Generated 3D formats — binary, no diff
+*.stl binary
+*.3mf binary
+*.amf binary
