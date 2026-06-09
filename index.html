@@ -132,6 +132,7 @@
     }
 
     #debug-log {
+      display: none;
       position: absolute;
       top: 8px; left: 8px; right: 8px;
       max-height: 140px;
@@ -360,8 +361,11 @@ document.getElementById('mode-assembly').addEventListener('click', () => {
 // ── OpenSCAD worker ───────────────────────────────────────────────────────────
 // ── Debug log panel ───────────────────────────────────────────────────────────
 const debugEl = document.getElementById('debug-log');
+const debugMode = new URLSearchParams(location.search).has('debug');
+if (debugMode) debugEl.style.display = 'block';
 function dbg(msg) {
   console.log('[main]', msg);
+  if (!debugMode) return;
   debugEl.textContent += msg + '\n';
   debugEl.scrollTop = debugEl.scrollHeight;
 }
